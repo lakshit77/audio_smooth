@@ -1,0 +1,2378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Uttam Voice Player</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d0f;
+      --surface: #16181c;
+      --surface2: #1e2028;
+      --border: #2a2d38;
+      --accent: #7c6ff7;
+      --accent2: #a78bfa;
+      --accent-glow: rgba(124,111,247,0.25);
+      --text: #e8e9f0;
+      --text-muted: #6b7280;
+      --text-dim: #9ca3af;
+      --active-bg: rgba(124,111,247,0.1);
+      --radius: 12px;
+      --col-a: #7c6ff7;
+      --col-a-dim: #3a3570;
+      --col-a-played: #a78bfa;
+      --col-b: #22d3ee;
+      --col-b-dim: #0d4a54;
+      --col-b-played: #67e8f9;
+      --col-diff: #fb923c;
+      --col-diff-glow: rgba(251,146,60,0.35);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+    header h1 { font-size: 1.15rem; font-weight: 600; letter-spacing: -0.01em; }
+
+    /* Mode toggle */
+    .mode-tabs {
+      margin-left: 24px;
+      display: flex;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .mode-tab {
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .mode-tab.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .mode-tab:not(.active):hover { color: var(--text); }
+
+    #header-status { color: var(--text-muted); font-size: 0.82rem; margin-left: auto; }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w, 260px);
+      min-width: 160px;
+      max-width: 520px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    /* Drag handle */
+    .sidebar-resizer {
+      position: absolute;
+      top: 0; right: 0;
+      width: 6px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sidebar-resizer::after {
+      content: '';
+      display: block;
+      width: 2px;
+      height: 40px;
+      border-radius: 2px;
+      background: var(--border);
+      transition: background 0.15s, height 0.15s;
+    }
+    .sidebar-resizer:hover::after,
+    .sidebar-resizer.dragging::after {
+      background: var(--accent);
+      height: 64px;
+    }
+    .sidebar-header {
+      padding: 12px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sidebar-header h2 { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .file-count {
+      background: var(--surface2);
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      padding: 2px 7px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+
+    /* Compare slot badges in sidebar hint */
+    .compare-hint {
+      padding: 8px 14px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      line-height: 1.5;
+    }
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      vertical-align: middle;
+    }
+    .badge-a { background: var(--col-a); color: #fff; }
+    .badge-b { background: var(--col-b); color: #000; }
+
+    .track-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+    }
+    .track-list::-webkit-scrollbar { width: 4px; }
+    .track-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .track-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.12s;
+      border: 1px solid transparent;
+      position: relative;
+    }
+    .track-item:hover { background: var(--surface2); }
+    .track-item.slot-a { border-color: rgba(124,111,247,0.4); background: rgba(124,111,247,0.08); }
+    .track-item.slot-b { border-color: rgba(34,211,238,0.4); background: rgba(34,211,238,0.06); }
+
+    .slot-badge {
+      width: 18px; height: 18px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      opacity: 0;
+    }
+    .track-item.slot-a .slot-badge { background: var(--col-a); color: #fff; opacity: 1; }
+    .track-item.slot-b .slot-badge { background: var(--col-b); color: #000; opacity: 1; }
+
+    .track-num { width: 18px; font-size: 0.72rem; color: var(--text-muted); text-align: center; flex-shrink: 0; }
+    .track-item.slot-a .track-num, .track-item.slot-b .track-num { display: none; }
+
+    .track-info { flex: 1; min-width: 0; }
+    .track-name {
+      font-size: 0.82rem; font-weight: 500;
+      word-break: break-all;
+      line-height: 1.35;
+    }
+    .track-meta { font-size: 0.7rem; color: var(--text-muted); margin-top: 1px; }
+    .track-dur { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+    /* slot assign buttons shown on hover */
+    .slot-btns {
+      display: none;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .track-item:hover .slot-btns { display: flex; }
+    .track-item.slot-a:hover .slot-btns,
+    .track-item.slot-b:hover .slot-btns { display: flex; }
+    .slot-btn {
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: none;
+      font-size: 0.65rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.1s;
+    }
+    .slot-btn-a { background: var(--col-a); color: #fff; }
+    .slot-btn-b { background: var(--col-b); color: #000; }
+    .slot-btn:hover { opacity: 0.8; }
+
+    /* drop zone */
+    .drop-zone {
+      margin: 8px;
+      border: 1.5px dashed var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--text-muted);
+      font-size: 0.76rem;
+      line-height: 1.5;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--active-bg);
+      color: var(--accent2);
+    }
+
+    /* ── Main area ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Single mode ── */
+    #view-single {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 40px;
+      gap: 28px;
+      overflow-y: auto;
+    }
+    .np-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 6px; }
+    .np-title { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.02em; max-width: 640px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* waveform */
+    .wf-container { width: 100%; max-width: 780px; position: relative; }
+    .wf-wrap {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      height: 110px;
+    }
+    .wf-wrap canvas { display: block; width: 100%; height: 100%; }
+    .wf-loading {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--surface);
+      flex-direction: column; gap: 8px;
+      font-size: 0.8rem; color: var(--text-muted);
+    }
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .time-labels {
+      display: flex; justify-content: space-between;
+      margin-top: 5px;
+      font-size: 0.7rem; font-variant-numeric: tabular-nums;
+      color: var(--text-muted); padding: 0 2px;
+    }
+
+    /* controls */
+    .controls { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; max-width: 780px; }
+    .controls-row { display: flex; align-items: center; gap: 14px; }
+    .btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-dim);
+      display: flex; align-items: center; justify-content: center;
+      transition: color 0.12s, transform 0.1s;
+      padding: 5px; border-radius: 50%;
+    }
+    .btn:hover { color: var(--text); }
+    .btn:active { transform: scale(0.91); }
+    .btn-play {
+      width: 50px; height: 50px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; border-radius: 50%;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+    .btn-play:hover { transform: scale(1.06); }
+    .btn-play:active { transform: scale(0.95); }
+    .btn svg { display: block; }
+
+    .volume-row { display: flex; align-items: center; gap: 9px; color: var(--text-muted); }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      height: 4px; background: var(--border); border-radius: 4px;
+      outline: none; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 13px; height: 13px;
+      background: var(--accent2); border-radius: 50%;
+      box-shadow: 0 0 5px var(--accent-glow);
+    }
+    #volume-slider { width: 80px; }
+    select.ctrl-select {
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 3px 7px; font-size: 0.76rem;
+      cursor: pointer; outline: none;
+    }
+    select.ctrl-select:hover { border-color: var(--accent); }
+
+    /* ── Compare mode ── */
+    #view-compare {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* top two-column waveform strip */
+    .compare-waveforms {
+      display: flex;
+      gap: 0;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .compare-col {
+      flex: 1;
+      padding: 16px 20px 12px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .compare-col:last-child { border-right: none; }
+
+    .col-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .col-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .col-label-a { background: var(--col-a); color: #fff; }
+    .col-label-b { background: var(--col-b); color: #000; }
+
+    .col-track-name {
+      font-size: 0.82rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 0;
+    }
+    .col-time {
+      font-size: 0.72rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .col-wf-wrap {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      height: 90px;
+    }
+    .col-wf-wrap canvas { display: block; width: 100%; height: 100%; }
+
+    .col-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-sm {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-dim);
+      display: flex; align-items: center; justify-content: center;
+      padding: 4px; border-radius: 50%;
+      transition: color 0.12s, transform 0.1s;
+    }
+    .btn-sm:hover { color: var(--text); }
+    .btn-sm:active { transform: scale(0.9); }
+    .btn-play-sm {
+      width: 36px; height: 36px;
+      border-radius: 50%; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; transition: all 0.12s;
+    }
+    .btn-play-sm-a { background: var(--col-a); box-shadow: 0 2px 12px rgba(124,111,247,0.3); }
+    .btn-play-sm-b { background: var(--col-b); box-shadow: 0 2px 12px rgba(34,211,238,0.3); color: #000; }
+    .btn-play-sm:hover { transform: scale(1.07); }
+    .btn-play-sm:active { transform: scale(0.93); }
+    .col-vol { width: 64px; }
+    .col-time-cur { font-size: 0.7rem; font-variant-numeric: tabular-nums; color: var(--text-muted); margin-left: auto; }
+
+    /* Overlap / diff section */
+    .diff-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .diff-header {
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .diff-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .diff-legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-left: 8px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+    .legend-swatch {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 2px;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+
+    .diff-threshold-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+    #diff-threshold { width: 80px; }
+
+    .diff-canvas-wrap {
+      flex: 1;
+      position: relative;
+      margin: 12px 20px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      cursor: pointer;
+      min-height: 0;
+    }
+    .diff-canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+    .diff-loading {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--surface);
+      flex-direction: column; gap: 8px;
+      font-size: 0.8rem; color: var(--text-muted);
+    }
+    .diff-time-labels {
+      position: absolute;
+      bottom: 6px; left: 10px; right: 10px;
+      display: flex; justify-content: space-between;
+      font-size: 0.68rem; font-variant-numeric: tabular-nums;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    /* empty state */
+    .empty-state {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      flex: 1; gap: 12px;
+      color: var(--text-muted); text-align: center; padding: 40px;
+    }
+    .empty-icon { font-size: 2.5rem; opacity: 0.28; }
+    .empty-state p { font-size: 0.88rem; line-height: 1.6; }
+
+    /* ── Bottom bar ── */
+    .bottom-bar {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 10px 28px;
+      display: flex; align-items: center; gap: 14px;
+      font-size: 0.76rem; color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+    .status-dot.active { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.5); }
+    kbd {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 5px;
+      font-size: 0.68rem; font-family: inherit; color: var(--text-muted);
+    }
+
+    /* Sync play toggle */
+    .sync-toggle {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.74rem; color: var(--text-muted);
+      cursor: pointer; user-select: none;
+    }
+    .sync-toggle input { cursor: pointer; accent-color: var(--accent); }
+
+    /* Play-both button */
+    .btn-play-both {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px;
+      border-radius: 6px; border: none; cursor: pointer;
+      background: linear-gradient(135deg, var(--col-a), var(--col-b));
+      color: #fff; font-size: 0.76rem; font-weight: 600;
+      transition: opacity 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+    .btn-play-both:hover { opacity: 0.85; }
+    .btn-play-both:active { transform: scale(0.96); }
+
+    /* Sync ring on individual play buttons when sync is active */
+    .btn-play-sm.sync-linked {
+      box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--col-diff) !important;
+    }
+
+    /* ── Process view ── */
+    #view-process {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 32px 20px;
+      overflow-y: auto;
+    }
+
+    .process-card {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .process-section-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    /* File drop zone (process panel) */
+    .proc-drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 28px 20px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      line-height: 1.6;
+      position: relative;
+    }
+    .proc-drop-zone:hover,
+    .proc-drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--active-bg);
+      color: var(--accent2);
+    }
+    .proc-drop-icon {
+      font-size: 2rem;
+      margin-bottom: 6px;
+      opacity: 0.5;
+    }
+    .proc-drop-zone.has-file {
+      border-color: var(--accent);
+      background: rgba(124,111,247,0.06);
+    }
+    .proc-drop-zone.has-file .proc-drop-icon { opacity: 1; }
+    .proc-selected-name {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--accent2);
+      margin-top: 4px;
+      word-break: break-all;
+    }
+    .proc-browse-btn {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 5px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-dim);
+      font-size: 0.76rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .proc-browse-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent2);
+    }
+    .proc-existing-input {
+      width: 100%;
+      margin-top: 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.8rem;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .proc-existing-input::placeholder { color: var(--text-muted); }
+    .proc-existing-input:focus { border-color: var(--accent); }
+
+    /* Operation cards grid */
+    .op-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .op-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: relative;
+      user-select: none;
+    }
+    .op-card:hover {
+      border-color: var(--accent);
+      background: var(--active-bg);
+    }
+    .op-card.selected {
+      border-color: var(--accent);
+      background: rgba(124,111,247,0.12);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .op-card-icon { font-size: 1.4rem; line-height: 1; margin-bottom: 2px; }
+    .op-card-name { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+    .op-card-desc { font-size: 0.73rem; color: var(--text-muted); line-height: 1.4; }
+
+    /* Order badge on selected cards */
+    .op-order-badge {
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    /* Pipeline preview strip */
+    .pipeline-preview {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-height: 32px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+    .pipeline-empty {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    .pipeline-step {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--surface2);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 3px 10px 3px 6px;
+      font-size: 0.74rem;
+      font-weight: 500;
+      color: var(--accent2);
+    }
+    .pipeline-step-num {
+      width: 16px; height: 16px;
+      background: var(--accent);
+      border-radius: 50%;
+      color: #fff;
+      font-size: 0.62rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .pipeline-step-remove {
+      margin-left: 4px;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      line-height: 1;
+      padding: 0 2px;
+      border-radius: 3px;
+      transition: color 0.1s;
+    }
+    .pipeline-step-remove:hover { color: #f87171; }
+    .pipeline-arrow {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+
+    /* Output name */
+    .proc-output-input {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.82rem;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .proc-output-input::placeholder { color: var(--text-muted); }
+    .proc-output-input:focus { border-color: var(--accent); }
+
+    /* Run button */
+    .proc-run-btn {
+      width: 100%;
+      padding: 13px;
+      border-radius: var(--radius);
+      border: none;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: opacity 0.15s, transform 0.1s;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+    .proc-run-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .proc-run-btn:active:not(:disabled) { transform: translateY(0); }
+    .proc-run-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* Terminal log */
+    .proc-terminal {
+      background: #0a0a0c;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      min-height: 140px;
+      max-height: 280px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.75rem;
+      line-height: 1.6;
+      color: #b0ffb0;
+    }
+    .proc-terminal::-webkit-scrollbar { width: 4px; }
+    .proc-terminal::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    .proc-log-line { color: #b0ffb0; }
+    .proc-log-line.error { color: #ff6b6b; }
+    .proc-log-line.success { color: #4ade80; font-weight: 600; }
+    .proc-log-placeholder { color: #444; }
+
+    /* Save button */
+    .proc-save-btn {
+      width: 100%;
+      padding: 11px;
+      border-radius: var(--radius);
+      border: 1.5px solid #4ade80;
+      background: rgba(74,222,128,0.1);
+      color: #4ade80;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: none;
+    }
+    .proc-save-btn:hover { background: rgba(74,222,128,0.2); }
+    .proc-save-btn.added {
+      border-color: #22d3ee;
+      background: rgba(34,211,238,0.1);
+      color: #22d3ee;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">🎙</div>
+  <h1>Uttam Voice</h1>
+
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="single">Single</button>
+    <button class="mode-tab" data-mode="compare">Compare</button>
+    <button class="mode-tab" data-mode="process">Process</button>
+  </div>
+
+  <span id="header-status">No track loaded</span>
+</header>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>Tracks</h2>
+      <span class="file-count" id="file-count">0</span>
+    </div>
+
+    <div class="compare-hint" id="compare-hint" style="display:none">
+      In Compare mode, click <span class="badge badge-a">A</span> or <span class="badge badge-b">B</span> on a track to assign it to a slot.
+    </div>
+
+    <div class="track-list" id="track-list"></div>
+
+    <label class="drop-zone" id="drop-zone">
+      <div style="font-size:1.1rem;margin-bottom:3px">＋</div>
+      Drop audio files here<br>or click to browse
+      <input type="file" id="file-input" accept="audio/*" multiple hidden />
+    </label>
+
+    <div class="sidebar-resizer" id="sidebar-resizer"></div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- ── Single view ── -->
+    <div id="view-single">
+      <div class="empty-state" id="single-empty">
+        <div class="empty-icon">🎧</div>
+        <p>Select a track from the sidebar<br>or drop audio files to get started</p>
+      </div>
+
+      <div id="single-player" style="display:none; flex-direction:column; align-items:center; gap:28px; width:100%; max-width:780px;">
+        <div style="text-align:center">
+          <div class="np-label">Now Playing</div>
+          <div class="np-title" id="np-title">—</div>
+        </div>
+
+        <div class="wf-container">
+          <div class="wf-wrap" id="wf-wrap-single">
+            <canvas id="wf-canvas-single"></canvas>
+            <div class="wf-loading" id="wf-loading-single"><div class="spinner"></div>Analysing…</div>
+          </div>
+          <div class="time-labels">
+            <span id="s-time-cur">0:00</span>
+            <span id="s-time-tot">0:00</span>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="controls-row">
+            <button class="btn" id="s-btn-prev">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6V6zm3.5 6 8.5 6V6l-8.5 6z"/></svg>
+            </button>
+            <button class="btn" id="s-btn-back">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+            </button>
+            <button class="btn btn-play" id="s-btn-play">
+              <svg id="s-play-icon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <svg id="s-pause-icon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+            <button class="btn" id="s-btn-fwd">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/></svg>
+            </button>
+            <button class="btn" id="s-btn-next">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+            </button>
+          </div>
+          <div class="volume-row">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1" />
+            <span id="vol-label" style="font-size:0.73rem;width:30px;text-align:right">100%</span>
+            &nbsp;
+            <span style="font-size:0.73rem">Speed</span>
+            <select id="speed-select" class="ctrl-select">
+              <option value="0.5">0.5×</option>
+              <option value="0.75">0.75×</option>
+              <option value="1" selected>1×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+              <option value="2">2×</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Compare view ── -->
+    <div id="view-compare" style="display:none">
+
+      <!-- Side-by-side waveforms -->
+      <div class="compare-waveforms">
+
+        <!-- Column A -->
+        <div class="compare-col" id="col-a">
+          <div class="col-header">
+            <span class="col-label col-label-a">A</span>
+            <span class="col-track-name" id="col-a-name">— no track assigned —</span>
+            <span class="col-time" id="col-a-time">0:00 / 0:00</span>
+          </div>
+          <div class="col-wf-wrap" id="wf-wrap-a">
+            <canvas id="wf-canvas-a"></canvas>
+            <div class="wf-loading" id="wf-loading-a"><div class="spinner" style="border-top-color:var(--col-a)"></div>Analysing…</div>
+          </div>
+          <div class="col-controls">
+            <button class="btn-play-sm btn-play-sm-a" id="c-btn-play-a">
+              <svg id="c-play-icon-a" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <svg id="c-pause-icon-a" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+            <button class="btn-sm" id="c-back-a" title="-5s">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+            </button>
+            <button class="btn-sm" id="c-fwd-a" title="+5s">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/></svg>
+            </button>
+            <input type="range" class="col-vol" min="0" max="1" step="0.01" value="1" id="vol-a" />
+            <span style="font-size:0.7rem;color:var(--text-muted)" id="vol-a-label">100%</span>
+          </div>
+        </div>
+
+        <!-- Column B -->
+        <div class="compare-col" id="col-b">
+          <div class="col-header">
+            <span class="col-label col-label-b">B</span>
+            <span class="col-track-name" id="col-b-name">— no track assigned —</span>
+            <span class="col-time" id="col-b-time">0:00 / 0:00</span>
+          </div>
+          <div class="col-wf-wrap" id="wf-wrap-b">
+            <canvas id="wf-canvas-b"></canvas>
+            <div class="wf-loading" id="wf-loading-b"><div class="spinner" style="border-top-color:var(--col-b)"></div>Analysing…</div>
+          </div>
+          <div class="col-controls">
+            <button class="btn-play-sm btn-play-sm-b" id="c-btn-play-b">
+              <svg id="c-play-icon-b" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <svg id="c-pause-icon-b" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            </button>
+            <button class="btn-sm" id="c-back-b" title="-5s">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+            </button>
+            <button class="btn-sm" id="c-fwd-b" title="+5s">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/></svg>
+            </button>
+            <input type="range" class="col-vol" min="0" max="1" step="0.01" value="1" id="vol-b" />
+            <span style="font-size:0.7rem;color:var(--text-muted)" id="vol-b-label">100%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overlap / Diff -->
+      <div class="diff-section">
+        <div class="diff-header">
+          <span class="diff-title">Overlap &amp; Diff</span>
+          <div class="diff-legend">
+            <span><span class="legend-swatch" style="background:var(--col-a);opacity:0.7"></span>Track A</span>
+            <span><span class="legend-swatch" style="background:var(--col-b);opacity:0.7"></span>Track B</span>
+            <span><span class="legend-swatch" style="background:var(--col-diff)"></span>Difference</span>
+          </div>
+          <button class="btn-play-both" id="btn-play-both" style="margin-left:16px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            Play Both
+          </button>
+          <label class="sync-toggle" style="margin-left:8px" title="When checked, playing/pausing/scrubbing one track moves the other too">
+            <input type="checkbox" id="sync-playback" /> Sync playback
+          </label>
+          <div class="diff-threshold-row">
+            Sensitivity
+            <input type="range" id="diff-threshold" min="0.02" max="0.4" step="0.01" value="0.08" />
+            <span id="diff-thresh-label">0.08</span>
+          </div>
+        </div>
+
+        <div class="diff-canvas-wrap" id="diff-canvas-wrap">
+          <canvas id="diff-canvas"></canvas>
+          <div class="diff-loading" id="diff-loading">
+            <div class="spinner" style="border-top-color:var(--col-diff)"></div>
+            Assign both tracks to see the diff…
+          </div>
+          <div class="diff-time-labels">
+            <span id="diff-time-cur">0:00</span>
+            <span id="diff-time-tot">0:00</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Process view ── -->
+    <div id="view-process">
+      <div class="process-card">
+
+        <!-- Step 1: File input -->
+        <div>
+          <div class="process-section-label">Step 1 — Select file</div>
+          <div class="proc-drop-zone" id="proc-drop-zone">
+            <div class="proc-drop-icon" id="proc-drop-icon">📂</div>
+            <div id="proc-drop-text">Drag &amp; drop an audio or video file here</div>
+            <div class="proc-selected-name" id="proc-selected-name" style="display:none"></div>
+            <label class="proc-browse-btn" for="proc-file-input">Browse</label>
+            <input type="file" id="proc-file-input" accept="audio/*,video/*,.wav,.mp3,.mp4,.mkv,.mov,.m4a,.ogg,.flac" hidden />
+            <input
+              type="text"
+              class="proc-existing-input"
+              id="proc-existing-input"
+              placeholder="or type existing filename, e.g. recording.wav"
+            />
+          </div>
+        </div>
+
+        <!-- Step 2: Operations (multi-select, ordered) -->
+        <div>
+          <div class="process-section-label">Step 2 — Build pipeline <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);font-size:0.68rem">(click cards in the order you want them to run)</span></div>
+          <div class="op-grid">
+            <div class="op-card" data-op="extract_audio">
+              <div class="op-card-icon">🎬</div>
+              <div class="op-card-name">Extract Audio</div>
+              <div class="op-card-desc">Extract audio track from video file</div>
+            </div>
+            <div class="op-card" data-op="remove_fillers">
+              <div class="op-card-icon">🗣</div>
+              <div class="op-card-name">Remove Fillers</div>
+              <div class="op-card-desc">Remove um, uh, and filler words using AI</div>
+            </div>
+            <div class="op-card" data-op="denoise">
+              <div class="op-card-icon">🔇</div>
+              <div class="op-card-name">Denoise</div>
+              <div class="op-card-desc">Remove background noise (Demucs model)</div>
+            </div>
+            <div class="op-card" data-op="deverb">
+              <div class="op-card-icon">🏠</div>
+              <div class="op-card-name">De-verb</div>
+              <div class="op-card-desc">Remove room reverb via spectral subtraction</div>
+            </div>
+          </div>
+
+          <!-- Pipeline preview -->
+          <div class="pipeline-preview" id="pipeline-preview">
+            <span class="pipeline-empty" id="pipeline-empty-msg">No operations selected — click cards above to add them</span>
+          </div>
+        </div>
+
+        <!-- Run button -->
+        <button class="proc-run-btn" id="proc-run-btn" disabled>Run Pipeline</button>
+
+        <!-- Terminal log -->
+        <div class="proc-terminal" id="proc-terminal">
+          <span class="proc-log-placeholder">Logs will appear here when processing starts…</span>
+        </div>
+
+        <!-- Save / refresh button (shown after success) -->
+        <button class="proc-save-btn" id="proc-save-btn"></button>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="bottom-bar">
+  <div class="status-dot" id="status-dot"></div>
+  <span id="status-text">Ready · Select a track or drop audio files</span>
+  <span style="margin-left:auto;display:flex;gap:10px;align-items:center">
+    <kbd>Space</kbd> play/pause &nbsp;
+    <kbd>←</kbd><kbd>→</kbd> seek ±5s &nbsp;
+    <kbd>↑</kbd><kbd>↓</kbd> volume
+  </span>
+</div>
+
+<!-- Two audio elements for compare mode -->
+<audio id="audio-single"></audio>
+<audio id="audio-a"></audio>
+<audio id="audio-b"></audio>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+// Constants & shared state
+// ─────────────────────────────────────────────────────────────────
+
+const DIFF_COLS = 800; // resolution of diff canvas columns
+
+const state = {
+  tracks: [],
+  mode: 'single',       // 'single' | 'compare'
+  single: { index: -1, playing: false, peaks: null, animId: null },
+  cmp: {
+    a: { index: -1, peaks: null, playing: false, animId: null },
+    b: { index: -1, peaks: null, playing: false, animId: null },
+    diffPeaks: null,    // { a, b, diff } — normalised Float32Arrays of length DIFF_COLS
+    diffAnimId: null,
+    diffScrubbing: false,
+  },
+  audioCtx: null,
+  syncPlayback: false,
+};
+
+// ─────────────────────────────────────────────────────────────────
+// DOM
+// ─────────────────────────────────────────────────────────────────
+const audioS  = document.getElementById('audio-single');
+const audioA  = document.getElementById('audio-a');
+const audioB  = document.getElementById('audio-b');
+
+const trackListEl  = document.getElementById('track-list');
+const fileCountEl  = document.getElementById('file-count');
+const headerStatus = document.getElementById('header-status');
+const statusText   = document.getElementById('status-text');
+const statusDot    = document.getElementById('status-dot');
+const compareHint  = document.getElementById('compare-hint');
+
+// single
+const viewSingle      = document.getElementById('view-single');
+const singleEmpty     = document.getElementById('single-empty');
+const singlePlayer    = document.getElementById('single-player');
+const npTitle         = document.getElementById('np-title');
+const wfWrapS         = document.getElementById('wf-wrap-single');
+const wfCanvasS       = document.getElementById('wf-canvas-single');
+const wfLoadingS      = document.getElementById('wf-loading-single');
+const sTimeCur        = document.getElementById('s-time-cur');
+const sTimeTot        = document.getElementById('s-time-tot');
+const sBtnPlay        = document.getElementById('s-btn-play');
+const sPlayIcon       = document.getElementById('s-play-icon');
+const sPauseIcon      = document.getElementById('s-pause-icon');
+const sBtnPrev        = document.getElementById('s-btn-prev');
+const sBtnNext        = document.getElementById('s-btn-next');
+const sBtnBack        = document.getElementById('s-btn-back');
+const sBtnFwd         = document.getElementById('s-btn-fwd');
+const volumeSlider    = document.getElementById('volume-slider');
+const volLabel        = document.getElementById('vol-label');
+const speedSelect     = document.getElementById('speed-select');
+
+// compare
+const viewCompare     = document.getElementById('view-compare');
+const colAName        = document.getElementById('col-a-name');
+const colBName        = document.getElementById('col-b-name');
+const colATime        = document.getElementById('col-a-time');
+const colBTime        = document.getElementById('col-b-time');
+
+const wfWrapA         = document.getElementById('wf-wrap-a');
+const wfCanvasA       = document.getElementById('wf-canvas-a');
+const wfLoadingA      = document.getElementById('wf-loading-a');
+
+const wfWrapB         = document.getElementById('wf-wrap-b');
+const wfCanvasB       = document.getElementById('wf-canvas-b');
+const wfLoadingB      = document.getElementById('wf-loading-b');
+
+const cBtnPlayA       = document.getElementById('c-btn-play-a');
+const cPlayIconA      = document.getElementById('c-play-icon-a');
+const cPauseIconA     = document.getElementById('c-pause-icon-a');
+const cBtnPlayB       = document.getElementById('c-btn-play-b');
+const cPlayIconB      = document.getElementById('c-play-icon-b');
+const cPauseIconB     = document.getElementById('c-pause-icon-b');
+
+const volASlider      = document.getElementById('vol-a');
+const volALabel       = document.getElementById('vol-a-label');
+const volBSlider      = document.getElementById('vol-b');
+const volBLabel       = document.getElementById('vol-b-label');
+
+const diffCanvasWrap  = document.getElementById('diff-canvas-wrap');
+const diffCanvas      = document.getElementById('diff-canvas');
+const diffLoading     = document.getElementById('diff-loading');
+const diffTimeCur     = document.getElementById('diff-time-cur');
+const diffTimeTot     = document.getElementById('diff-time-tot');
+const syncCheckbox    = document.getElementById('sync-playback');
+const diffThreshold   = document.getElementById('diff-threshold');
+const diffThreshLabel = document.getElementById('diff-thresh-label');
+
+// ─────────────────────────────────────────────────────────────────
+// Utils
+// ─────────────────────────────────────────────────────────────────
+function fmt(s) {
+  if (!isFinite(s) || s < 0) return '0:00';
+  const m = Math.floor(s / 60);
+  return `${m}:${Math.floor(s % 60).toString().padStart(2,'0')}`;
+}
+function fmtSize(b) {
+  return b > 1048576 ? (b/1048576).toFixed(1)+' MB' : (b/1024).toFixed(0)+' KB';
+}
+function setStatus(t) { statusText.textContent = t; }
+
+function getAudioCtx() {
+  if (!state.audioCtx) state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return state.audioCtx;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Canvas helpers
+// ─────────────────────────────────────────────────────────────────
+function initCanvas(canvas, wrap) {
+  const dpr = window.devicePixelRatio || 1;
+  const r = wrap.getBoundingClientRect();
+  canvas.width  = r.width  * dpr;
+  canvas.height = r.height * dpr;
+  const c = canvas.getContext('2d');
+  c.scale(dpr, dpr);
+  canvas._w = r.width;
+  canvas._h = r.height;
+  return c;
+}
+
+function drawWaveform(canvas, peaks, progress, colorPlayed, colorUnplayed, playheadColor) {
+  const c = canvas.getContext('2d');
+  const W = canvas._w || canvas.width;
+  const H = canvas._h || canvas.height;
+  c.clearRect(0, 0, W, H);
+  if (!peaks) return;
+
+  const playedPx = Math.floor(progress * W);
+  const mid = H / 2;
+  const n = peaks.length;
+
+  for (let i = 0; i < n; i++) {
+    const x = (i / n) * W;
+    const barH = Math.max(2, peaks[i] * H * 0.84);
+    c.fillStyle = x <= playedPx ? colorPlayed : colorUnplayed;
+    c.fillRect(x, mid - barH / 2, Math.max(1.5, W / n - 0.4), barH);
+  }
+
+  if (progress > 0) {
+    c.fillStyle = playheadColor || 'rgba(255,255,255,0.9)';
+    c.fillRect(playedPx - 1, 0, 2, H);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Peak extraction
+// ─────────────────────────────────────────────────────────────────
+async function extractPeaks(url, numCols) {
+  const ctx = getAudioCtx();
+  const resp = await fetch(url);
+  const ab = await resp.arrayBuffer();
+  const buf = await ctx.decodeAudioData(ab);
+  const ch = buf.getChannelData(0);
+  const blockSize = Math.ceil(ch.length / numCols);
+  const peaks = new Float32Array(numCols);
+  for (let i = 0; i < numCols; i++) {
+    let sum = 0;
+    const s = i * blockSize;
+    const e = Math.min(s + blockSize, ch.length);
+    for (let j = s; j < e; j++) sum += ch[j] * ch[j];
+    peaks[i] = Math.sqrt(sum / (e - s));
+  }
+  const max = peaks.reduce((a,b) => Math.max(a,b), 0) || 1;
+  for (let i = 0; i < numCols; i++) peaks[i] /= max;
+  return { peaks, duration: buf.duration };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Diff computation
+// ─────────────────────────────────────────────────────────────────
+function computeDiff(peaksA, peaksB) {
+  const n = Math.min(peaksA.length, peaksB.length);
+  const diff = new Float32Array(n);
+  for (let i = 0; i < n; i++) diff[i] = Math.abs(peaksA[i] - peaksB[i]);
+  const maxDiff = diff.reduce((a,b) => Math.max(a,b), 0) || 1;
+  const normDiff = new Float32Array(n);
+  for (let i = 0; i < n; i++) normDiff[i] = diff[i] / maxDiff;
+  return { rawDiff: diff, normDiff, maxDiff };
+}
+
+function drawDiff(progress) {
+  const dp = state.cmp.diffPeaks;
+  if (!dp) return;
+
+  const c = diffCanvas.getContext('2d');
+  const W = diffCanvas._w || diffCanvas.width;
+  const H = diffCanvas._h || diffCanvas.height;
+  c.clearRect(0, 0, W, H);
+
+  const threshold = parseFloat(diffThreshold.value);
+  const n = dp.a.length;
+  const mid = H / 2;
+  const playedPx = Math.floor(progress * W);
+  const barW = Math.max(1.5, W / n - 0.3);
+
+  // Draw A (bottom half mirrored) — subtle
+  for (let i = 0; i < n; i++) {
+    const x = (i / n) * W;
+    const hA = Math.max(1.5, dp.a[i] * H * 0.38);
+    c.fillStyle = x <= playedPx ? 'rgba(124,111,247,0.75)' : 'rgba(124,111,247,0.25)';
+    c.fillRect(x, mid - hA, barW, hA);
+    c.fillRect(x, mid, barW, hA);
+  }
+
+  // Draw B on top — teal, semi-transparent
+  for (let i = 0; i < n; i++) {
+    const x = (i / n) * W;
+    const hB = Math.max(1.5, dp.b[i] * H * 0.38);
+    c.fillStyle = x <= playedPx ? 'rgba(34,211,238,0.65)' : 'rgba(34,211,238,0.2)';
+    c.fillRect(x, mid - hB, barW, hB);
+    c.fillRect(x, mid, barW, hB);
+  }
+
+  // Draw diff highlights where raw diff exceeds threshold
+  for (let i = 0; i < n; i++) {
+    const x = (i / n) * W;
+    if (dp.rawDiff[i] < threshold) continue;
+    const intensity = Math.min(1, dp.normDiff[i]);
+    const hD = Math.max(3, intensity * H * 0.46);
+    c.fillStyle = `rgba(251,146,60,${0.35 + intensity * 0.55})`;
+    c.fillRect(x, mid - hD, barW, hD * 2);
+  }
+
+  // Center line
+  c.fillStyle = 'rgba(255,255,255,0.08)';
+  c.fillRect(0, mid - 0.5, W, 1);
+
+  // Playhead
+  if (progress > 0) {
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    c.fillRect(playedPx - 1, 0, 2, H);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Mode switching
+// ─────────────────────────────────────────────────────────────────
+const viewProcess = document.getElementById('view-process');
+
+document.querySelectorAll('.mode-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const m = btn.dataset.mode;
+    if (m === state.mode) return;
+    state.mode = m;
+    document.querySelectorAll('.mode-tab').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+    viewSingle.style.display  = m === 'single'  ? 'flex' : 'none';
+    viewCompare.style.display = m === 'compare' ? 'flex' : 'none';
+    viewProcess.style.display = m === 'process' ? 'flex' : 'none';
+    compareHint.style.display = m === 'compare' ? 'block' : 'none';
+    renderTrackList();
+
+    if (m === 'compare') {
+      // re-init canvases
+      setTimeout(() => {
+        initCanvas(wfCanvasA, wfWrapA);
+        initCanvas(wfCanvasB, wfWrapB);
+        initCanvas(diffCanvas, diffCanvasWrap);
+        if (state.cmp.a.peaks) drawWaveform(wfCanvasA, state.cmp.a.peaks, cmpProgress(audioA), '#a78bfa', 'var(--col-a-dim)', '#fff');
+        if (state.cmp.b.peaks) drawWaveform(wfCanvasB, state.cmp.b.peaks, cmpProgress(audioB), '#67e8f9', 'var(--col-b-dim)', '#fff');
+        if (state.cmp.diffPeaks) drawDiff(diffProgress());
+      }, 50);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Track list
+// ─────────────────────────────────────────────────────────────────
+function renderTrackList() {
+  trackListEl.innerHTML = '';
+  fileCountEl.textContent = state.tracks.length;
+
+  state.tracks.forEach((t, i) => {
+    const isA = state.cmp.a.index === i;
+    const isB = state.cmp.b.index === i;
+    const isActive = state.single.index === i;
+
+    const el = document.createElement('div');
+    el.className = 'track-item' +
+      (state.mode === 'single' && isActive ? ' slot-a' : '') +
+      (state.mode === 'compare' && isA ? ' slot-a' : '') +
+      (state.mode === 'compare' && isB ? ' slot-b' : '');
+
+    el.innerHTML = `
+      <div class="slot-badge">${isA ? 'A' : isB ? 'B' : ''}</div>
+      <div class="track-num">${i+1}</div>
+      <div class="track-info">
+        <div class="track-name" title="${t.name}">${t.name}</div>
+        <div class="track-meta">${t.size ? fmtSize(t.size) : 'WAV audio'}</div>
+      </div>
+      <div class="track-dur">${t.duration ? fmt(t.duration) : '—'}</div>
+      ${state.mode === 'compare' ? `
+        <div class="slot-btns">
+          <button class="slot-btn slot-btn-a" data-i="${i}" data-slot="a">A</button>
+          <button class="slot-btn slot-btn-b" data-i="${i}" data-slot="b">B</button>
+        </div>` : ''}
+    `;
+
+    if (state.mode === 'single') {
+      el.addEventListener('click', () => loadSingle(i));
+    }
+
+    el.querySelectorAll('.slot-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        assignSlot(parseInt(btn.dataset.i), btn.dataset.slot);
+      });
+    });
+
+    trackListEl.appendChild(el);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Single mode
+// ─────────────────────────────────────────────────────────────────
+function loadSingle(index, autoplay = true) {
+  const track = state.tracks[index];
+  if (!track) return;
+
+  state.single.index = index;
+  state.single.peaks = null;
+  renderTrackList();
+
+  singleEmpty.style.display = 'none';
+  singlePlayer.style.display = 'flex';
+  npTitle.textContent = track.name;
+  headerStatus.textContent = track.name;
+
+  wfLoadingS.style.display = 'flex';
+  wfCanvasS.style.opacity = '0';
+
+  audioS.src = track.url;
+  audioS.load();
+  if (autoplay) audioS.play().catch(() => {});
+
+  loadPeaksForSingle(track);
+}
+
+async function loadPeaksForSingle(track) {
+  try {
+    const W = (wfCanvasS._w || wfWrapS.getBoundingClientRect().width) * (window.devicePixelRatio || 1);
+    const { peaks, duration } = await extractPeaks(track.url, Math.round(W));
+    state.single.peaks = peaks;
+    track.duration = duration;
+    renderTrackList();
+    sTimeTot.textContent = fmt(duration);
+    wfLoadingS.style.display = 'none';
+    wfCanvasS.style.opacity = '1';
+    drawWaveform(wfCanvasS, peaks, 0, '#a78bfa', '#3a3570', '#fff');
+    startSingleAnim();
+  } catch(e) {
+    console.error(e);
+    wfLoadingS.innerHTML = '<span style="color:#f87171">Could not decode</span>';
+  }
+}
+
+function startSingleAnim() {
+  cancelAnimationFrame(state.single.animId);
+  function loop() {
+    if (state.single.peaks && isFinite(audioS.duration)) {
+      const p = audioS.currentTime / audioS.duration;
+      drawWaveform(wfCanvasS, state.single.peaks, p, '#a78bfa', '#3a3570', '#fff');
+      sTimeCur.textContent = fmt(audioS.currentTime);
+    }
+    state.single.animId = requestAnimationFrame(loop);
+  }
+  state.single.animId = requestAnimationFrame(loop);
+}
+
+audioS.addEventListener('play',  () => { state.single.playing = true;  syncSingleUI(); statusDot.classList.add('active');    setStatus(`Playing: ${state.tracks[state.single.index]?.name}`); startSingleAnim(); });
+audioS.addEventListener('pause', () => { state.single.playing = false; syncSingleUI(); statusDot.classList.remove('active'); setStatus(`Paused: ${state.tracks[state.single.index]?.name}`); });
+audioS.addEventListener('ended', () => {
+  state.single.playing = false; syncSingleUI(); statusDot.classList.remove('active');
+  const next = state.single.index + 1;
+  if (next < state.tracks.length) loadSingle(next, true);
+});
+audioS.addEventListener('loadedmetadata', () => {
+  sTimeTot.textContent = fmt(audioS.duration);
+  if (state.tracks[state.single.index]) state.tracks[state.single.index].duration = audioS.duration;
+});
+
+function syncSingleUI() {
+  sPlayIcon.style.display  = state.single.playing ? 'none'  : 'block';
+  sPauseIcon.style.display = state.single.playing ? 'block' : 'none';
+}
+
+sBtnPlay.addEventListener('click', () => {
+  if (state.single.index === -1) { if (state.tracks.length) loadSingle(0); return; }
+  audioS.paused ? audioS.play() : audioS.pause();
+});
+sBtnPrev.addEventListener('click', () => { const i = state.single.index; if (i > 0) loadSingle(i-1, state.single.playing); });
+sBtnNext.addEventListener('click', () => { const i = state.single.index; if (i < state.tracks.length-1) loadSingle(i+1, state.single.playing); });
+sBtnBack.addEventListener('click', () => { audioS.currentTime = Math.max(0, audioS.currentTime - 5); });
+sBtnFwd.addEventListener('click',  () => { audioS.currentTime = Math.min(audioS.duration || 0, audioS.currentTime + 5); });
+
+volumeSlider.addEventListener('input', () => {
+  audioS.volume = volumeSlider.value;
+  volLabel.textContent = Math.round(volumeSlider.value * 100) + '%';
+});
+speedSelect.addEventListener('change', () => { audioS.playbackRate = parseFloat(speedSelect.value); });
+
+// Single waveform scrub
+let sScrubbing = false;
+wfWrapS.addEventListener('mousedown', e => { sScrubbing = true; scrubSingle(e); });
+window.addEventListener('mousemove',  e => { if (sScrubbing) scrubSingle(e); });
+window.addEventListener('mouseup',    () => { sScrubbing = false; });
+
+function scrubSingle(e) {
+  if (!isFinite(audioS.duration)) return;
+  const r = wfWrapS.getBoundingClientRect();
+  audioS.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * audioS.duration;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Compare mode — slot assignment
+// ─────────────────────────────────────────────────────────────────
+async function assignSlot(index, slot) {
+  const track = state.tracks[index];
+  if (!track) return;
+
+  const isA = slot === 'a';
+  const audio = isA ? audioA : audioB;
+  const canvas = isA ? wfCanvasA : wfCanvasB;
+  const wrap   = isA ? wfWrapA   : wfWrapB;
+  const loading = isA ? wfLoadingA : wfLoadingB;
+  const nameEl = isA ? colAName : colBName;
+
+  // Stop previous
+  audio.pause();
+  audio.src = track.url;
+  audio.load();
+
+  nameEl.textContent = track.name;
+  loading.style.display = 'flex';
+  canvas.style.opacity = '0';
+
+  if (isA) {
+    state.cmp.a.index = index;
+    state.cmp.a.peaks = null;
+  } else {
+    state.cmp.b.index = index;
+    state.cmp.b.peaks = null;
+  }
+
+  renderTrackList();
+
+  // Reset diff
+  state.cmp.diffPeaks = null;
+  diffLoading.style.display = 'flex';
+  diffLoading.innerHTML = '<div class="spinner" style="border-top-color:var(--col-diff)"></div>Assign both tracks to see the diff…';
+
+  try {
+    initCanvas(canvas, wrap);
+    const numCols = Math.round((canvas._w || wrap.getBoundingClientRect().width) * (window.devicePixelRatio||1));
+    const { peaks, duration } = await extractPeaks(track.url, numCols);
+
+    if (isA) { state.cmp.a.peaks = peaks; } else { state.cmp.b.peaks = peaks; }
+
+    track.duration = duration;
+    renderTrackList();
+
+    loading.style.display = 'none';
+    canvas.style.opacity = '1';
+
+    if (isA) {
+      colATime.textContent = `0:00 / ${fmt(duration)}`;
+      drawWaveform(canvas, peaks, 0, '#a78bfa', 'var(--col-a-dim)', '#fff');
+    } else {
+      colBTime.textContent = `0:00 / ${fmt(duration)}`;
+      drawWaveform(canvas, peaks, 0, '#67e8f9', 'var(--col-b-dim)', '#fff');
+    }
+
+    startCmpAnim(slot);
+
+    // Build diff if both slots filled
+    if (state.cmp.a.peaks && state.cmp.b.peaks) {
+      buildDiff();
+    }
+  } catch(e) {
+    console.error(e);
+    loading.innerHTML = '<span style="color:#f87171">Decode error</span>';
+  }
+}
+
+function buildDiff() {
+  const pa = state.cmp.a.peaks;
+  const pb = state.cmp.b.peaks;
+  if (!pa || !pb) return;
+
+  // Re-sample both to DIFF_COLS
+  const n = DIFF_COLS;
+  const ra = new Float32Array(n);
+  const rb = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    ra[i] = pa[Math.round(i / n * (pa.length-1))];
+    rb[i] = pb[Math.round(i / n * (pb.length-1))];
+  }
+  const { rawDiff, normDiff } = computeDiff(ra, rb);
+  state.cmp.diffPeaks = { a: ra, b: rb, rawDiff, normDiff };
+
+  // Count significant diff segments
+  const threshold = parseFloat(diffThreshold.value);
+  const diffCount = rawDiff.filter(v => v >= threshold).length;
+  const diffPct = ((diffCount / n) * 100).toFixed(1);
+
+  initCanvas(diffCanvas, diffCanvasWrap);
+  diffLoading.style.display = 'none';
+
+  const durA = state.tracks[state.cmp.a.index]?.duration || 0;
+  const durB = state.tracks[state.cmp.b.index]?.duration || 0;
+  diffTimeTot.textContent = fmt(Math.max(durA, durB));
+
+  drawDiff(0);
+  setStatus(`Diff ready — ${diffPct}% differs above threshold`);
+  startDiffAnim();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Compare playback helpers
+// ─────────────────────────────────────────────────────────────────
+function cmpProgress(audio) {
+  return isFinite(audio.duration) && audio.duration > 0 ? audio.currentTime / audio.duration : 0;
+}
+
+function diffProgress() {
+  // Use whichever audio is playing; prefer A
+  const a = state.cmp.a.index !== -1 ? audioA : null;
+  const b = state.cmp.b.index !== -1 ? audioB : null;
+  const dur = Math.max(
+    (a && isFinite(a.duration) ? a.duration : 0),
+    (b && isFinite(b.duration) ? b.duration : 0)
+  );
+  if (dur === 0) return 0;
+  const t = a ? a.currentTime : (b ? b.currentTime : 0);
+  return t / dur;
+}
+
+function startCmpAnim(slot) {
+  const isA = slot === 'a';
+  const audio  = isA ? audioA : audioB;
+  const canvas = isA ? wfCanvasA : wfCanvasB;
+  const timeEl = isA ? colATime : colBTime;
+  const cmpState = isA ? state.cmp.a : state.cmp.b;
+  const trackIdx = isA ? state.cmp.a.index : state.cmp.b.index;
+  const colorP  = isA ? '#a78bfa' : '#67e8f9';
+  const colorU  = isA ? 'var(--col-a-dim)' : 'var(--col-b-dim)';
+
+  cancelAnimationFrame(cmpState.animId);
+  function loop() {
+    if (cmpState.peaks && isFinite(audio.duration)) {
+      const p = cmpProgress(audio);
+      drawWaveform(canvas, cmpState.peaks, p, colorP, colorU, '#fff');
+      const dur = state.tracks[trackIdx]?.duration;
+      timeEl.textContent = `${fmt(audio.currentTime)} / ${fmt(dur||audio.duration)}`;
+    }
+    cmpState.animId = requestAnimationFrame(loop);
+  }
+  cmpState.animId = requestAnimationFrame(loop);
+}
+
+function startDiffAnim() {
+  cancelAnimationFrame(state.cmp.diffAnimId);
+  function loop() {
+    if (state.cmp.diffPeaks) {
+      const p = diffProgress();
+      drawDiff(p);
+      const t = audioA.currentTime || audioB.currentTime || 0;
+      diffTimeCur.textContent = fmt(t);
+    }
+    state.cmp.diffAnimId = requestAnimationFrame(loop);
+  }
+  state.cmp.diffAnimId = requestAnimationFrame(loop);
+}
+
+// ── Guard flag: prevents cross-triggering when sync fires the other audio ──
+let _syncFiring = false;
+
+function isSynced() { return state.syncPlayback; }
+
+// Audio A events
+audioA.addEventListener('play', () => {
+  state.cmp.a.playing = true;
+  syncCmpUI('a');
+  updateSyncRings();
+  if (isSynced() && !_syncFiring && state.cmp.b.index !== -1 && audioB.src) {
+    _syncFiring = true;
+    audioB.currentTime = audioA.currentTime;
+    audioB.play().catch(()=>{}).finally(() => { _syncFiring = false; });
+  }
+});
+audioA.addEventListener('pause', () => {
+  state.cmp.a.playing = false;
+  syncCmpUI('a');
+  if (isSynced() && !_syncFiring) {
+    _syncFiring = true;
+    audioB.pause();
+    _syncFiring = false;
+  }
+});
+audioA.addEventListener('ended', () => { state.cmp.a.playing = false; syncCmpUI('a'); });
+
+// Audio B events
+audioB.addEventListener('play', () => {
+  state.cmp.b.playing = true;
+  syncCmpUI('b');
+  updateSyncRings();
+  if (isSynced() && !_syncFiring && state.cmp.a.index !== -1 && audioA.src) {
+    _syncFiring = true;
+    audioA.currentTime = audioB.currentTime;
+    audioA.play().catch(()=>{}).finally(() => { _syncFiring = false; });
+  }
+});
+audioB.addEventListener('pause', () => {
+  state.cmp.b.playing = false;
+  syncCmpUI('b');
+  if (isSynced() && !_syncFiring) {
+    _syncFiring = true;
+    audioA.pause();
+    _syncFiring = false;
+  }
+});
+audioB.addEventListener('ended', () => { state.cmp.b.playing = false; syncCmpUI('b'); });
+
+function syncCmpUI(slot) {
+  const playing = slot === 'a' ? state.cmp.a.playing : state.cmp.b.playing;
+  const pi = slot === 'a' ? cPlayIconA : cPlayIconB;
+  const pa = slot === 'a' ? cPauseIconA : cPauseIconB;
+  pi.style.display = playing ? 'none'  : 'block';
+  pa.style.display = playing ? 'block' : 'none';
+  // Update Play Both button label
+  const bothPlaying = state.cmp.a.playing || state.cmp.b.playing;
+  btnPlayBoth.innerHTML = bothPlaying
+    ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Pause Both`
+    : `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Play Both`;
+}
+
+function updateSyncRings() {
+  const synced = isSynced();
+  cBtnPlayA.classList.toggle('sync-linked', synced);
+  cBtnPlayB.classList.toggle('sync-linked', synced);
+}
+
+// Individual play buttons — always control only their own audio
+cBtnPlayA.addEventListener('click', () => {
+  if (state.cmp.a.index === -1) return;
+  audioA.paused ? audioA.play() : audioA.pause();
+});
+cBtnPlayB.addEventListener('click', () => {
+  if (state.cmp.b.index === -1) return;
+  audioB.paused ? audioB.play() : audioB.pause();
+});
+
+// Play Both button
+const btnPlayBoth = document.getElementById('btn-play-both');
+btnPlayBoth.addEventListener('click', () => {
+  const eitherPlaying = !audioA.paused || !audioB.paused;
+  if (eitherPlaying) {
+    audioA.pause();
+    audioB.pause();
+  } else {
+    // Sync positions to A's time before starting both
+    if (isFinite(audioB.duration)) audioB.currentTime = isFinite(audioA.duration) ? audioA.currentTime : 0;
+    const pa = state.cmp.a.index !== -1 ? audioA.play().catch(()=>{}) : Promise.resolve();
+    const pb = state.cmp.b.index !== -1 ? audioB.play().catch(()=>{}) : Promise.resolve();
+    Promise.all([pa, pb]);
+  }
+});
+
+document.getElementById('c-back-a').addEventListener('click', () => {
+  audioA.currentTime = Math.max(0, audioA.currentTime - 5);
+  if (isSynced() && isFinite(audioB.duration)) audioB.currentTime = audioA.currentTime;
+});
+document.getElementById('c-fwd-a').addEventListener('click', () => {
+  audioA.currentTime = Math.min(audioA.duration||0, audioA.currentTime + 5);
+  if (isSynced() && isFinite(audioB.duration)) audioB.currentTime = audioA.currentTime;
+});
+document.getElementById('c-back-b').addEventListener('click', () => {
+  audioB.currentTime = Math.max(0, audioB.currentTime - 5);
+  if (isSynced() && isFinite(audioA.duration)) audioA.currentTime = audioB.currentTime;
+});
+document.getElementById('c-fwd-b').addEventListener('click', () => {
+  audioB.currentTime = Math.min(audioB.duration||0, audioB.currentTime + 5);
+  if (isSynced() && isFinite(audioA.duration)) audioA.currentTime = audioB.currentTime;
+});
+
+volASlider.addEventListener('input', () => { audioA.volume = volASlider.value; volALabel.textContent = Math.round(volASlider.value*100)+'%'; });
+volBSlider.addEventListener('input', () => { audioB.volume = volBSlider.value; volBLabel.textContent = Math.round(volBSlider.value*100)+'%'; });
+
+syncCheckbox.addEventListener('change', () => {
+  state.syncPlayback = syncCheckbox.checked;
+  updateSyncRings();
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Compare waveform scrub
+// ─────────────────────────────────────────────────────────────────
+function makeScrub(wrap, audioEl, otherAudio) {
+  let scrubbing = false;
+  wrap.addEventListener('mousedown', e => { scrubbing = true; doScrub(e); });
+  window.addEventListener('mousemove', e => { if (scrubbing) doScrub(e); });
+  window.addEventListener('mouseup',   () => { scrubbing = false; });
+  function doScrub(e) {
+    if (!isFinite(audioEl.duration)) return;
+    const r = wrap.getBoundingClientRect();
+    const t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * audioEl.duration;
+    audioEl.currentTime = t;
+    if (isSynced() && isFinite(otherAudio.duration)) otherAudio.currentTime = t;
+  }
+}
+makeScrub(wfWrapA, audioA, audioB);
+makeScrub(wfWrapB, audioB, audioA);
+
+// Diff canvas scrub
+let diffScrubbing = false;
+diffCanvasWrap.addEventListener('mousedown', e => { diffScrubbing = true; doDiffScrub(e); });
+window.addEventListener('mousemove', e => { if (diffScrubbing) doDiffScrub(e); });
+window.addEventListener('mouseup', () => { diffScrubbing = false; });
+
+function doDiffScrub(e) {
+  const r = diffCanvasWrap.getBoundingClientRect();
+  const frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  if (isFinite(audioA.duration)) audioA.currentTime = frac * audioA.duration;
+  if (isFinite(audioB.duration)) audioB.currentTime = frac * audioB.duration;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Diff threshold slider — live redraw
+// ─────────────────────────────────────────────────────────────────
+diffThreshold.addEventListener('input', () => {
+  diffThreshLabel.textContent = parseFloat(diffThreshold.value).toFixed(2);
+  if (state.cmp.a.peaks && state.cmp.b.peaks) buildDiff();
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Keyboard shortcuts
+// ─────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  if (state.mode === 'single') {
+    switch (e.code) {
+      case 'Space': e.preventDefault(); sBtnPlay.click(); break;
+      case 'ArrowRight': e.preventDefault(); audioS.currentTime = Math.min(audioS.duration||0, audioS.currentTime+5); break;
+      case 'ArrowLeft':  e.preventDefault(); audioS.currentTime = Math.max(0, audioS.currentTime-5); break;
+      case 'ArrowUp':    e.preventDefault(); volumeSlider.value = Math.min(1, +volumeSlider.value+0.05); audioS.volume = volumeSlider.value; volLabel.textContent = Math.round(volumeSlider.value*100)+'%'; break;
+      case 'ArrowDown':  e.preventDefault(); volumeSlider.value = Math.max(0, +volumeSlider.value-0.05); audioS.volume = volumeSlider.value; volLabel.textContent = Math.round(volumeSlider.value*100)+'%'; break;
+    }
+  } else {
+    switch (e.code) {
+      case 'Space': e.preventDefault();
+        if (state.cmp.a.index !== -1) audioA.paused ? audioA.play() : audioA.pause();
+        break;
+      case 'ArrowRight': e.preventDefault();
+        if (isFinite(audioA.duration)) audioA.currentTime = Math.min(audioA.duration, audioA.currentTime+5);
+        if (isSynced() && isFinite(audioB.duration)) audioB.currentTime = Math.min(audioB.duration, audioB.currentTime+5);
+        break;
+      case 'ArrowLeft':  e.preventDefault();
+        audioA.currentTime = Math.max(0, audioA.currentTime-5);
+        if (isSynced()) audioB.currentTime = Math.max(0, audioB.currentTime-5);
+        break;
+    }
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// File handling
+// ─────────────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add('drag-over'); }));
+['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, () => dropZone.classList.remove('drag-over')));
+dropZone.addEventListener('drop', e => { e.preventDefault(); handleFiles([...e.dataTransfer.files]); });
+fileInput.addEventListener('change', () => { handleFiles([...fileInput.files]); fileInput.value = ''; });
+
+function handleFiles(files) {
+  const audio = files.filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|ogg|flac|m4a|aac|opus)$/i.test(f.name));
+  audio.forEach(f => {
+    if (state.tracks.some(t => t.name === f.name)) return;
+    state.tracks.push({ name: f.name, url: URL.createObjectURL(f), duration: null, size: f.size });
+  });
+  renderTrackList();
+  setStatus(`Added ${audio.length} file(s). Total: ${state.tracks.length}`);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sidebar resize drag
+// ─────────────────────────────────────────────────────────────────
+(function() {
+  const sidebar  = document.querySelector('.sidebar');
+  const resizer  = document.getElementById('sidebar-resizer');
+  const MIN_W = 160;
+  const MAX_W = 520;
+  let dragging = false;
+  let startX   = 0;
+  let startW   = 0;
+
+  resizer.addEventListener('mousedown', e => {
+    dragging = true;
+    startX   = e.clientX;
+    startW   = sidebar.getBoundingClientRect().width;
+    resizer.classList.add('dragging');
+    document.body.style.cursor    = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const delta = e.clientX - startX;
+    const newW  = Math.max(MIN_W, Math.min(MAX_W, startW + delta));
+    sidebar.style.setProperty('--sidebar-w', newW + 'px');
+    sidebar.style.width = newW + 'px';
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor    = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+// ─────────────────────────────────────────────────────────────────
+// Canvas resize observers
+// ─────────────────────────────────────────────────────────────────
+new ResizeObserver(() => {
+  initCanvas(wfCanvasS, wfWrapS);
+  if (state.single.peaks) drawWaveform(wfCanvasS, state.single.peaks, cmpProgress(audioS), '#a78bfa', '#3a3570', '#fff');
+}).observe(wfWrapS);
+
+new ResizeObserver(() => {
+  initCanvas(wfCanvasA, wfWrapA);
+  if (state.cmp.a.peaks) drawWaveform(wfCanvasA, state.cmp.a.peaks, cmpProgress(audioA), '#a78bfa', 'var(--col-a-dim)', '#fff');
+}).observe(wfWrapA);
+
+new ResizeObserver(() => {
+  initCanvas(wfCanvasB, wfWrapB);
+  if (state.cmp.b.peaks) drawWaveform(wfCanvasB, state.cmp.b.peaks, cmpProgress(audioB), '#67e8f9', 'var(--col-b-dim)', '#fff');
+}).observe(wfWrapB);
+
+new ResizeObserver(() => {
+  initCanvas(diffCanvas, diffCanvasWrap);
+  if (state.cmp.diffPeaks) drawDiff(diffProgress());
+}).observe(diffCanvasWrap);
+
+// ─────────────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────────────
+async function init() {
+  initCanvas(wfCanvasS, wfWrapS);
+  initCanvas(wfCanvasA, wfWrapA);
+  initCanvas(wfCanvasB, wfWrapB);
+  initCanvas(diffCanvas, diffCanvasWrap);
+
+  wfLoadingA.style.display = 'none';
+  wfLoadingB.style.display = 'none';
+
+  // Load track list from server
+  try {
+    const res   = await fetch('/tracks');
+    const names = await res.json();
+    names.forEach(name => {
+      if (!state.tracks.some(t => t.name === name))
+        state.tracks.push({ name, url: encodeURIComponent(name), duration: null });
+    });
+    setStatus(`${names.length} track${names.length !== 1 ? 's' : ''} loaded · Select Single or Compare mode`);
+  } catch (e) {
+    // Fallback: no tracks, user can drop files manually
+    setStatus('Could not load tracks from server · Drop audio files to add them');
+  }
+
+  renderTrackList();
+}
+
+init();
+
+// ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// Process panel
+// ─────────────────────────────────────────────────────────────────
+(function () {
+  const procDropZone      = document.getElementById('proc-drop-zone');
+  const procDropIcon      = document.getElementById('proc-drop-icon');
+  const procDropText      = document.getElementById('proc-drop-text');
+  const procSelectedName  = document.getElementById('proc-selected-name');
+  const procFileInput     = document.getElementById('proc-file-input');
+  const procExistingInput = document.getElementById('proc-existing-input');
+  const procRunBtn        = document.getElementById('proc-run-btn');
+  const procTerminal      = document.getElementById('proc-terminal');
+  const procSaveBtn       = document.getElementById('proc-save-btn');
+  const pipelinePreview   = document.getElementById('pipeline-preview');
+  const pipelineEmptyMsg  = document.getElementById('pipeline-empty-msg');
+
+  let selectedFile     = null;  // File object (if uploaded)
+  let selectedExisting = '';    // existing server filename (if typed)
+  let selectedOps      = [];    // ordered array of operation keys
+  let lastOutputFile   = '';    // final output filename after pipeline
+
+  // ── Operation metadata ──
+  const OP_META = {
+    extract_audio:  { label: 'Extract Audio',   icon: '🎬', suffix: '.wav' },
+    remove_fillers: { label: 'Remove Fillers',  icon: '🗣',  suffix: '_cleaned.wav' },
+    denoise:        { label: 'Denoise',          icon: '🔇', suffix: '_denoised.wav' },
+    deverb:         { label: 'De-verb',          icon: '🏠', suffix: '_deverbed.wav' },
+  };
+
+  // Given the initial input filename, compute the output name for a given op
+  function computeOutput(inputName, op) {
+    const dot = inputName.lastIndexOf('.');
+    const base = dot > 0 ? inputName.slice(0, dot) : inputName;
+    if (op === 'extract_audio') return base + '.wav';
+    return base + OP_META[op].suffix;
+  }
+
+  // Given a chain of ops and initial input, compute the full chain of filenames
+  // Returns array: [{op, input, output}, ...]
+  function buildChain(initialInput, ops) {
+    const chain = [];
+    let current = initialInput;
+    for (const op of ops) {
+      const output = computeOutput(current, op);
+      chain.push({ op, input: current, output });
+      current = output;
+    }
+    return chain;
+  }
+
+  function currentInputName() {
+    if (selectedFile) return selectedFile.name;
+    return selectedExisting.trim();
+  }
+
+  // ── Render pipeline preview strip ──
+  function renderPipeline() {
+    // Remove all existing step nodes (keep empty msg)
+    [...pipelinePreview.children].forEach(el => {
+      if (el !== pipelineEmptyMsg) el.remove();
+    });
+
+    if (selectedOps.length === 0) {
+      pipelineEmptyMsg.style.display = '';
+      return;
+    }
+    pipelineEmptyMsg.style.display = 'none';
+
+    const inputName = currentInputName();
+    const chain = inputName ? buildChain(inputName, selectedOps) : null;
+
+    selectedOps.forEach((op, idx) => {
+      if (idx > 0) {
+        const arrow = document.createElement('span');
+        arrow.className = 'pipeline-arrow';
+        arrow.textContent = '→';
+        pipelinePreview.appendChild(arrow);
+      }
+
+      const step = document.createElement('div');
+      step.className = 'pipeline-step';
+      step.innerHTML = `
+        <span class="pipeline-step-num">${idx + 1}</span>
+        ${OP_META[op].icon} ${OP_META[op].label}
+        <span class="pipeline-step-remove" data-idx="${idx}" title="Remove">✕</span>
+      `;
+      step.querySelector('.pipeline-step-remove').addEventListener('click', e => {
+        e.stopPropagation();
+        removeOp(idx);
+      });
+      pipelinePreview.appendChild(step);
+    });
+
+    // Refresh order badges on cards
+    document.querySelectorAll('.op-card').forEach(card => {
+      const op = card.dataset.op;
+      const existing = card.querySelector('.op-order-badge');
+      if (existing) existing.remove();
+      const pos = selectedOps.indexOf(op);
+      if (pos !== -1) {
+        card.classList.add('selected');
+        const badge = document.createElement('div');
+        badge.className = 'op-order-badge';
+        badge.textContent = pos + 1;
+        card.appendChild(badge);
+      } else {
+        card.classList.remove('selected');
+      }
+    });
+  }
+
+  function removeOp(idx) {
+    selectedOps.splice(idx, 1);
+    renderPipeline();
+    updateRunBtn();
+  }
+
+  function updateRunBtn() {
+    const hasInput = !!(selectedFile || selectedExisting.trim());
+    procRunBtn.disabled = !(hasInput && selectedOps.length > 0);
+    if (selectedOps.length > 1) {
+      procRunBtn.textContent = `Run Pipeline (${selectedOps.length} steps)`;
+    } else if (selectedOps.length === 1) {
+      procRunBtn.textContent = 'Run';
+    } else {
+      procRunBtn.textContent = 'Run Pipeline';
+    }
+  }
+
+  // ── File drag-and-drop / browse ──
+  ['dragenter', 'dragover'].forEach(ev =>
+    procDropZone.addEventListener(ev, e => { e.preventDefault(); procDropZone.classList.add('drag-over'); })
+  );
+  ['dragleave', 'drop'].forEach(ev =>
+    procDropZone.addEventListener(ev, () => procDropZone.classList.remove('drag-over'))
+  );
+  procDropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  });
+  procFileInput.addEventListener('change', () => {
+    if (procFileInput.files[0]) setFile(procFileInput.files[0]);
+    procFileInput.value = '';
+  });
+
+  function setFile(file) {
+    selectedFile = file;
+    selectedExisting = '';
+    procExistingInput.value = '';
+    procDropIcon.textContent = '🎵';
+    procDropText.textContent = 'File selected:';
+    procSelectedName.textContent = file.name;
+    procSelectedName.style.display = 'block';
+    procDropZone.classList.add('has-file');
+    renderPipeline();
+    updateRunBtn();
+  }
+
+  procExistingInput.addEventListener('input', () => {
+    selectedExisting = procExistingInput.value;
+    if (selectedExisting.trim()) {
+      selectedFile = null;
+      procDropIcon.textContent = '📂';
+      procDropText.textContent = 'Drag & drop an audio or video file here';
+      procSelectedName.style.display = 'none';
+      procDropZone.classList.remove('has-file');
+    }
+    renderPipeline();
+    updateRunBtn();
+  });
+
+  // ── Operation card click — toggle/append to ordered list ──
+  document.querySelectorAll('.op-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const op = card.dataset.op;
+      const pos = selectedOps.indexOf(op);
+      if (pos !== -1) {
+        // Already selected — remove it
+        selectedOps.splice(pos, 1);
+      } else {
+        // Add to end of pipeline
+        selectedOps.push(op);
+      }
+      renderPipeline();
+      updateRunBtn();
+    });
+  });
+
+  // ── Terminal helpers ──
+  function clearTerminal() { procTerminal.innerHTML = ''; }
+
+  function appendLog(msg, cls = 'proc-log-line') {
+    const line = document.createElement('div');
+    line.className = cls;
+    line.textContent = msg;
+    procTerminal.appendChild(line);
+    procTerminal.scrollTop = procTerminal.scrollHeight;
+  }
+
+  function appendSeparator(label) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'color:#555;border-top:1px solid #222;margin:6px 0 4px;padding-top:4px;font-size:0.7rem;letter-spacing:0.05em;text-transform:uppercase;';
+    sep.textContent = '── ' + label + ' ──';
+    procTerminal.appendChild(sep);
+    procTerminal.scrollTop = procTerminal.scrollHeight;
+  }
+
+  // ── Stream one POST /process request, return final output filename or throw ──
+  async function runStep(op, inputFilename, inputFile /* File|null */, stepLabel) {
+    const formData = new FormData();
+    formData.append('operation', op);
+
+    if (inputFile) {
+      formData.append('file', inputFile);
+      formData.append('filename', inputFilename);
+    } else {
+      formData.append('file', new Blob([]), '');
+      formData.append('filename', inputFilename);
+    }
+
+    const resp = await fetch('/process', { method: 'POST', body: formData });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let outputFilename = null;
+
+    const processLines = (lines) => {
+      for (const raw of lines) {
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        let obj;
+        try { obj = JSON.parse(trimmed); } catch { continue; }
+        if (obj.log !== undefined) {
+          appendLog(obj.log);
+        } else if (obj.done) {
+          outputFilename = obj.output || '';
+          appendLog(`✓ Step done → ${outputFilename}`, 'proc-log-line success');
+        } else if (obj.error) {
+          throw new Error(obj.error);
+        }
+      }
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      processLines(lines);
+    }
+    if (buffer.trim()) processLines([buffer]);
+
+    if (!outputFilename) throw new Error('No output filename returned from server');
+    return outputFilename;
+  }
+
+  // ── Run button — execute full pipeline sequentially ──
+  procRunBtn.addEventListener('click', async () => {
+    if (selectedOps.length === 0) return;
+
+    clearTerminal();
+    procSaveBtn.style.display = 'none';
+    procSaveBtn.className = 'proc-save-btn';
+    lastOutputFile = '';
+    procRunBtn.disabled = true;
+    procRunBtn.textContent = 'Running…';
+
+    const initialInput = currentInputName();
+    const chain = buildChain(initialInput, selectedOps);
+
+    appendLog(`Pipeline: ${selectedOps.length} step(s) · Input: ${initialInput}`);
+
+    let currentFilename = initialInput;
+    // Only the first step may carry a File object (upload); subsequent steps use server-side files
+    let currentFileObj = selectedFile;
+    let failed = false;
+
+    for (let i = 0; i < chain.length; i++) {
+      const { op } = chain[i];
+      const meta = OP_META[op];
+      appendSeparator(`Step ${i + 1}/${chain.length}: ${meta.icon} ${meta.label}`);
+
+      try {
+        const output = await runStep(op, currentFilename, currentFileObj, `Step ${i+1}`);
+        currentFilename = output;
+        currentFileObj = null; // subsequent steps use server-side file
+      } catch (err) {
+        appendLog(`✗ Step ${i+1} failed: ${err.message}`, 'proc-log-line error');
+        failed = true;
+        break;
+      }
+    }
+
+    if (!failed) {
+      lastOutputFile = currentFilename;
+      appendSeparator('Pipeline complete');
+      appendLog(`Final output: ${lastOutputFile}`, 'proc-log-line success');
+      procSaveBtn.textContent = `✓ Saved as "${lastOutputFile}" — Add to track list`;
+      procSaveBtn.style.display = 'block';
+    }
+
+    procRunBtn.disabled = false;
+    updateRunBtn();
+  });
+
+  // ── Save / refresh track list ──
+  procSaveBtn.addEventListener('click', async () => {
+    if (procSaveBtn.classList.contains('added')) return;
+    try {
+      const res = await fetch('/tracks');
+      const names = await res.json();
+      names.forEach(name => {
+        if (!state.tracks.some(t => t.name === name))
+          state.tracks.push({ name, url: encodeURIComponent(name), duration: null });
+      });
+      renderTrackList();
+      setStatus(`Track list refreshed · ${names.length} track(s)`);
+      procSaveBtn.textContent = 'Added to track list ✓';
+      procSaveBtn.classList.add('added');
+    } catch (e) {
+      appendLog('Could not refresh track list: ' + e.message, 'proc-log-line error');
+    }
+  });
+})();
+</script>
+</body>
+</html>
