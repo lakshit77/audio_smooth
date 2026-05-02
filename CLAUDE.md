@@ -75,6 +75,6 @@ Single self-contained HTML file with inline CSS and JS. No build step.
 ## Known Issues / Gotchas
 
 - `remove_filler.py` has a bug: line 33 references `FILLER_WORD` (singular, undefined) instead of iterating over the `FILLER_WORDS` set.
-- The OpenRouter API key in `remove_filler_llm.py` is hardcoded in plaintext — move it to an environment variable before sharing or committing.
+- OpenRouter: set `OPENROUTER_API_KEY` for `remove_filler_llm.py` and the server’s LLM filler-removal path (`server.py`).
 - `denoise_phase_inversion.py` assumes the first second of audio is silence/noise. Adjust `NOISE_START_SEC` / `NOISE_END_SEC` if the recording doesn't start with a clean noise sample.
 - All Python scripts hardcode the filenames at the top of the file. There is no CLI argument parsing.
